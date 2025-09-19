@@ -1,3 +1,5 @@
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 import pandera as pa
 from pandera import Column, DataFrameSchema, Check
