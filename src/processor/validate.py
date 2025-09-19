@@ -13,7 +13,7 @@ order_schema = DataFrameSchema({
     "delivery_time": Column(pa.DateTime, nullable=False, coerce=True),
     "delivery_duration_minutes": Column(pa.Float, nullable=False, coerce=True, checks=Check.ge(0)),
     "distance_km": Column(pa.Float, nullable=True, coerce=True, checks=Check.ge(0).le(100)),
-    "rating": Column(pa.Int, nullable=True, checks=Check.in_range(1, 5)),
+    "rating": Column(pa.Int, nullable=True, coerce=True, checks=Check.in_range(1, 5)),
     "amount": Column(pa.Float, nullable=True, coerce=True, checks=Check.ge(0)),
 })
 
