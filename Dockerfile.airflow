@@ -1,6 +1,6 @@
 FROM apache/airflow:2.8.1
 
-USER root
+USER airflow
 
 RUN pip install --no-cache-dir pandas pandera minio psycopg2-binary
 
