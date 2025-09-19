@@ -1,3 +1,5 @@
+import pandas as pd
+
 def validate_orders(csv_path: str):
     try:
         df = pd.read_csv(csv_path, parse_dates=['order_time', 'delivery_time'])
