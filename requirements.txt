@@ -1,3 +1,5 @@
-faker
 pandas
-# add other packages your DAG needs
+pandera
+minio
+psycopg2-binary
+faker
