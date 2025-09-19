@@ -1,7 +1,8 @@
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
+
 import pandas as pd
-import pandera as pa
+import pandera.pandas as pa
 from pandera import Column, DataFrameSchema, Check
 
 order_schema = DataFrameSchema({
@@ -13,12 +14,14 @@ order_schema = DataFrameSchema({
     "delivery_time": Column(pa.DateTime, nullable=False, coerce=True),
     "delivery_duration_minutes": Column(pa.Float, nullable=False, coerce=True, checks=Check.ge(0)),
     "distance_km": Column(pa.Float, nullable=True, coerce=True, checks=Check.ge(0).le(100)),
-    "rating": Column(pa.Int, nullable=True, coerce=True, checks=Check.in_range(1, 5)),
+    "rating": Column(pa.Float, nullable=True, coerce=True, checks=Check.in_range(1, 5)),
     "amount": Column(pa.Float, nullable=True, coerce=True, checks=Check.ge(0)),
 })
 
 def validate_orders(csv_path):
     df = pd.read_csv(csv_path)
+    # Convert rating to nullable integer type if preferred:
+    # df['rating'] = df['rating'].astype('Int64')
     try:
         validated_df = order_schema.validate(df)
         print(f"Validation passed for {csv_path}")
