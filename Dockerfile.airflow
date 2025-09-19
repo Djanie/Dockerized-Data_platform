@@ -1,11 +1,9 @@
 FROM apache/airflow:2.8.1
 
 USER root
-
 COPY requirements.txt .
 
+USER airflow
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ /opt/airflow/src/
-
-USER airflow
