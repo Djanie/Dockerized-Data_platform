@@ -7,7 +7,6 @@ import pandas as pd
 
 metadata = MetaData()
 
-# Define table schema for SQLAlchemy
 orders_table = Table('orders', metadata,
     Column('order_id', String, primary_key=True),
     Column('restaurant_id', Integer, nullable=False),
@@ -29,12 +28,15 @@ def get_engine():
     dbname = os.getenv('POSTGRES_DB', 'orders_db')
 
     db_url = f'postgresql+psycopg2://{user}:{password}@{host}:{port}/{dbname}'
-    return create_engine(db_url)
+    engine = create_engine(db_url)
+    return engine
 
 def upsert_orders(csv_path):
     engine = get_engine()
-    df = pd.read_csv(csv_path)
+    # Create table if it doesn't exist
+    metadata.create_all(engine)
 
+    df = pd.read_csv(csv_path)
     rows = df.to_dict(orient='records')
 
     with engine.connect() as conn:
@@ -44,9 +46,12 @@ def upsert_orders(csv_path):
                 index_elements=['order_id'],
                 set_={key: stmt.excluded[key] for key in row.keys()}
             )
+            trans = conn.begin()
             try:
                 conn.execute(do_update_stmt)
+                trans.commit()
             except SQLAlchemyError as e:
+                trans.rollback()
                 print(f"Error upserting row {row['order_id']}: {e}")
 
 if __name__ == "__main__":
