@@ -1,5 +1,6 @@
 pandas
-pandera>=0.24.0
+
+pandera>=0.18.0,<0.23.0
 minio
 psycopg2-binary
 faker
