@@ -21,16 +21,16 @@ orders_table = Table('orders', metadata,
 )
 
 def get_engine():
+    # Use Docker service name, not localhost
     user = os.getenv('POSTGRES_USER', 'postgres')
     password = os.getenv('POSTGRES_PASSWORD', 'postgres')
-    host = os.getenv('POSTGRES_HOST', 'localhost')
-    port = os.getenv('POSTGRES_PORT', '5433')
+    host = 'postgres'  # Docker service name
+    port = '5432'      # Internal container port
     dbname = os.getenv('POSTGRES_DB', 'orders_db')
 
     db_url = f'postgresql+psycopg2://{user}:{password}@{host}:{port}/{dbname}'
     engine = create_engine(db_url)
     return engine
-
 def upsert_orders(csv_path):
     engine = get_engine()
     # Create table if it doesn't exist
