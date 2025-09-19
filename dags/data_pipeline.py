@@ -15,10 +15,10 @@ default_args = {
 
 
 
-from src.generator.generate_data import generate_orders_csv
-from src.processor.validate import validate_orders
-from src.processor.transform import transform_orders
-from src.db.upsert import upsert_orders
+from generator.generate_data import generate_orders_csv
+from processor.validate import validate_orders
+from processor.transform import transform_orders
+from db.upsert import upsert_orders
 
 
 def generate():
