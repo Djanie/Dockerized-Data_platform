@@ -1,7 +1,7 @@
 import warnings
 import sys
 import pandas as pd
-import pandera.pandas as pa
+import pandera as pa
 from pandera import Column, DataFrameSchema, Check
 
 # Suppress the FutureWarning from pandera about the DataFrameSchema import
