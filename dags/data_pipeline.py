@@ -38,7 +38,7 @@ def upsert():
 
 with DAG('data_pipeline',
          default_args=default_args,
-         schedule_interval='@daily',
+         schedule='@daily',
          max_active_runs=1,
          catchup=False) as dag:
 
