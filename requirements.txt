@@ -1,0 +1,3 @@
+faker
+pandas
+# add other packages your DAG needs
