@@ -1,5 +1,3 @@
-
-
 services:
 
   postgres:
@@ -8,6 +6,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -27,11 +27,24 @@ services:
       - "${MINIO_CONSOLE_PORT}:9001"
     volumes:
       - minio_data:/data
-    healthcheck:
-      test: ["CMD", "mc", "alias", "health", "localminio"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+
+  airflow-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    environment:
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./data:/opt/airflow/data
+      - ./tests:/opt/airflow/tests
+    command: >
+      bash -c "airflow db init && airflow users create --username admin \
+      --firstname Admin --lastname User --role Admin --email admin@example.com --password admin"
+    depends_on:
+      - postgres
 
   airflow:
     build:
@@ -44,10 +57,10 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       AIRFLOW__CORE__DEFAULT_TIMEZONE: UTC
     depends_on:
-      postgres:
-        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
       minio:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - ./dags:/opt/airflow/dags
       - ./src:/opt/airflow/src
@@ -55,7 +68,7 @@ services:
       - ./tests:/opt/airflow/tests
     ports:
       - "8080:8080"
-    command: webserver
+    command: bash -c "while ! pg_isready -h postgres -p 5432 -U ${POSTGRES_USER}; do echo waiting for db; sleep 3; done; airflow webserver"
 
   metabase:
     image: metabase/metabase:v0.46.5
@@ -64,7 +77,7 @@ services:
     environment:
       MB_DB_TYPE: "postgres"
       MB_DB_DBNAME: ${POSTGRES_DB}
-      MB_DB_PORT: 5433
+      MB_DB_PORT: 5432
       MB_DB_USER: ${POSTGRES_USER}
       MB_DB_PASS: ${POSTGRES_PASSWORD}
       MB_DB_HOST: "postgres"
