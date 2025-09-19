@@ -13,7 +13,7 @@ default_args = {
     'catchup': False,
 }
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 
 from src.generator.generate_data import generate_orders_csv
 from src.processor.validate import validate_orders
