@@ -1,5 +1,22 @@
-FROM apache/airflow:2.8.1
-COPY requirements.txt .
+FROM apache/airflow:2.8.1-python3.10
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Switch back to airflow user
 USER airflow
-RUN pip install --no-cache-dir -r requirements.txt
-COPY src/ /opt/airflow/src/
+
+# Create app folder and copy only what we need (dags, src, requirements)
+COPY --chown=airflow:airflow dags/ /opt/airflow/dags/
+COPY --chown=airflow:airflow src/ /opt/airflow/src/
+COPY --chown=airflow:airflow requirements.txt /opt/airflow/requirements.txt
+
+# Install python deps (including editable if you want)
+RUN pip install --no-cache-dir -r /opt/airflow/requirements.txt
+
+# ensure python sees /opt/airflow/src
+ENV PYTHONPATH="/opt/airflow/src:${PYTHONPATH}"
+
+# default user (keeps airflow user)
+USER airflow
