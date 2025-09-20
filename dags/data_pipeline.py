@@ -1,17 +1,14 @@
+# dags/data_pipeline.py
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
-import sys, os, traceback
+import os
+import sys
 
-# Ensure Python can import the "src" package (parent of src must be on sys.path)
-ROOT = "/opt/airflow"
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+# Add src folder to PYTHONPATH inside DAG
+sys.path.insert(0, "/opt/airflow/src")
 
-print("DEBUG DAG LOAD: cwd:", os.getcwd())
-print("DEBUG DAG LOAD: PYTHONPATH env:", os.environ.get("PYTHONPATH"))
-print("DEBUG DAG LOAD: sys.path[:5]:", sys.path[:5])
-
+# Default arguments for DAG
 default_args = {
     "owner": "airflow",
     "depends_on_past": False,
@@ -21,67 +18,102 @@ default_args = {
     "catchup": False,
 }
 
-def generate_data(**kwargs):
-    """
-    Generate sample CSV files into /opt/airflow/data/incoming.
-    Adjust call to your generator function signature if needed.
-    """
-    try:
-        # debug
-        print("DEBUG generate_data sys.path[:8]:", sys.path[:8])
-        print("DEBUG generate_data PYTHONPATH:", os.environ.get("PYTHONPATH"))
-
-        # lazy import to avoid parse-time errors
-        from src.generator.generate_data import generate_orders_csv
-
-        out_dir = "/opt/airflow/data/incoming"
-        os.makedirs(out_dir, exist_ok=True)
-
-        # call generator (change n_files if you want more)
-        generate_orders_csv(out_dir, n_files=1)  # adjust arg names if your function differs
-        print("Generator finished writing to", out_dir)
-    except Exception:
-        print("Generator error:")
-        traceback.print_exc()
-        raise
-
-def validate_data(**kwargs):
-    try:
-        # debug
-        print("DEBUG validate_data sys.path[:8]:", sys.path[:8])
-        print("DEBUG validate_data PYTHONPATH:", os.environ.get("PYTHONPATH"))
-
-        # lazy import
-        from src.processor.validate import validate_orders
-
-        incoming_dir = "/opt/airflow/data/incoming"
-        for file in sorted(os.listdir(incoming_dir)):
-            if file.endswith(".csv"):
-                file_path = os.path.join(incoming_dir, file)
-                print(f"Validating: {file_path}")
-                validate_orders(file_path)
-        print("Validation finished.")
-    except Exception:
-        print("Validation error:")
-        traceback.print_exc()
-        raise
-
 with DAG(
     "data_pipeline",
     default_args=default_args,
-    description="Online Orders Data Pipeline (generate -> validate)",
-    schedule_interval=None,
+    schedule_interval="@daily",
+    max_active_runs=1,
     catchup=False,
 ) as dag:
 
-    gen = PythonOperator(
+    # --------------------
+    # Generate Data Task
+    # --------------------
+    def run_generator(**kwargs):
+        from generator.generate_data import run   # use the new run() function
+        run(num=1000, upload=False, call_upsert_flag=True)
+        print("Generator ran OK")
+
+    generate_task = PythonOperator(
         task_id="generate_data",
-        python_callable=generate_data,
+        python_callable=run_generator,
     )
 
-    val = PythonOperator(
+    # --------------------
+    # Validate Data Task
+    # --------------------
+    def run_validator(**kwargs):
+        from processor.validate import validate_orders
+
+        # pick latest CSV
+        incoming_dir = "/opt/airflow/data/incoming"
+        files = sorted(
+            [
+                os.path.join(incoming_dir, f)
+                for f in os.listdir(incoming_dir)
+                if f.endswith(".csv")
+            ],
+            key=os.path.getmtime,
+            reverse=True,
+        )
+        if not files:
+            raise FileNotFoundError("No CSV files found to validate")
+        latest_file = files[0]
+
+        ok, msg = validate_orders(latest_file)
+        print(f"Validation result: {ok}, {msg}")
+        if not ok:
+            raise ValueError(f"Validation failed: {msg}")
+
+    validate_task = PythonOperator(
         task_id="validate_data",
-        python_callable=validate_data,
+        python_callable=run_validator,
     )
 
-    gen >> val
+    # --------------------
+    # Transform Data Task
+    # --------------------
+    def run_transform(**kwargs):
+        from processor.transform import transform_orders
+
+        transform_orders()
+        print("Transform done")
+
+    transform_task = PythonOperator(
+        task_id="transform_data",
+        python_callable=run_transform,
+    )
+
+    # --------------------
+    # Upsert Data Task
+    # --------------------
+    def run_upsert(**kwargs):
+        # Ensure Airflow can find your src package
+        src_path = "/opt/airflow/src"
+        if src_path not in sys.path:
+            sys.path.insert(0, src_path)
+
+        try:
+            from db.upsert import upsert_orders
+        except ModuleNotFoundError as e:
+            print("Cannot import upsert_orders:", e)
+            raise
+
+        # Path to the transformed CSV
+        csv_path = "/opt/airflow/data/processed/orders_transformed.csv"
+        if not os.path.exists(csv_path):
+            raise FileNotFoundError(f"{csv_path} not found")
+
+        # Call your upsert function
+        upsert_orders(csv_path)
+        print(f"Upsert completed at {datetime.utcnow()}")
+
+    upsert_task = PythonOperator(
+        task_id="upsert_data",
+        python_callable=run_upsert,
+    )
+
+    # --------------------
+    # Set Dependencies
+    # --------------------
+    generate_task >> validate_task >> transform_task >> upsert_task
