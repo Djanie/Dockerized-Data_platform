@@ -89,12 +89,12 @@ with DAG(
     # --------------------
     def run_upsert(**kwargs):
         # Ensure Airflow can find your src package
-        src_path = "/opt/airflow/src"
+        src_path = "/opt/airflow"
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
 
         try:
-            from db.upsert import upsert_orders
+            from src.db.upsert import upsert_orders
         except ModuleNotFoundError as e:
             print("Cannot import upsert_orders:", e)
             raise
