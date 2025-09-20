@@ -3,10 +3,10 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
 import sys, os
 
-# --- force /opt/airflow/src on sys.path for imports ---
-SRC_PATH = "/opt/airflow/src"
-if SRC_PATH not in sys.path:
-    sys.path.insert(0, SRC_PATH)
+# --- ensure Python can import package named "src" (parent must be on sys.path) ---
+ROOT = "/opt/airflow"
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 print("DEBUG DAG LOAD: cwd:", os.getcwd())
 print("DEBUG DAG LOAD: PYTHONPATH env:", os.environ.get("PYTHONPATH"))
@@ -23,9 +23,10 @@ default_args = {
 
 def validate_data(**kwargs):
     import sys, os
-    print("DEBUG validate_data sys.path[:5]:", sys.path[:5])
+    print("DEBUG validate_data sys.path[:8]:", sys.path[:8])
     print("DEBUG validate_data PYTHONPATH:", os.environ.get("PYTHONPATH"))
 
+    # lazy import (after forcing sys.path)
     from src.processor.validate import validate_orders
 
     incoming_dir = "/opt/airflow/data/incoming"
@@ -46,5 +47,4 @@ with DAG(
     validate_task = PythonOperator(
         task_id="validate_data",
         python_callable=validate_data,
-        provide_context=True,
     )
