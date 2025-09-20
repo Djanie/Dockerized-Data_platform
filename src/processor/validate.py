@@ -1,38 +1,25 @@
-# --- import your validate function near other imports ---
-# at top of file
-from src.processor.validate import validate_orders
+# src/processor/validate.py
+import pandas as pd
 
-# --- after writing file to disk (out_path) ---
-# df is still available (the generated DataFrame)
-# Convert to same validation semantics: use your validate_orders function
-is_valid, validation_msg = validate_orders(str(out_path))
-
-# Build a lightweight validation summary for file_registry
-rows_in = len(df)
-duplicate_count = int(df.duplicated(keep=False).sum())
-validation_summary = {
-    "rows_in": rows_in,
-    "duplicate_count": duplicate_count,
-    "validator_passed": bool(is_valid),
-    "validator_message": validation_msg
-}
-
-# If Postgres available, insert a registry row. (This matches the earlier PgRegistry usage)
-record_id = None
-if psycopg2 is not None:
+def validate_orders(csv_path: str):
     try:
-        pg = PgRegistry(cfg)
-        pg.ensure_table()
-        if not is_valid:
-            # validation failed: register and stop early
-            record_id = pg.insert(out_path.name, datetime.utcnow(), "validation_failed", rows_in, duplicate_count, validation_summary)
-            logging.error("Validation failed for %s: %s", out_path, validation_msg)
-            # stop here — do not upload or call upsert
-            return 0
-        else:
-            # validation passed -> register as uploaded (we will upload next)
-            record_id = pg.insert(out_path.name, datetime.utcnow(), "uploaded", rows_in, duplicate_count, validation_summary)
+        df = pd.read_csv(csv_path, parse_dates=['order_time', 'delivery_time'])
+        errors = []
+        if df['order_id'].isnull().any():
+            errors.append("Missing order IDs")
+        if df['restaurant_id'].isnull().any():
+            errors.append("Missing restaurant IDs")
+        if df['customer_id'].isnull().any():
+            errors.append("Missing customer IDs")
+        if 'amount' in df.columns and df['amount'].notnull().any():
+            if (df['amount'].dropna() < 0).any():
+                errors.append("Negative amounts")
+        if 'delivery_time' in df.columns and 'order_time' in df.columns:
+            valid_times = df[['order_time', 'delivery_time']].dropna()
+            if not valid_times.empty and not (valid_times['delivery_time'] > valid_times['order_time']).all():
+                errors.append("Delivery before order")
+        if errors:
+            return False, ', '.join(errors)
+        return True, None
     except Exception as e:
-        logging.warning("Could not write file_registry: %s", e)
-else:
-    logging.info("psycopg2 not installed; skipping file_registry insert")
+        return False, str(e)
