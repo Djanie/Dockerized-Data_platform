@@ -1,11 +1,16 @@
-# dags/data_pipeline.py
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
-import os
-import subprocess
-import pandas as pd
-from pathlib import Path
+import sys, os
+
+# --- force /opt/airflow/src on sys.path for imports ---
+SRC_PATH = "/opt/airflow/src"
+if SRC_PATH not in sys.path:
+    sys.path.insert(0, SRC_PATH)
+
+print("DEBUG DAG LOAD: cwd:", os.getcwd())
+print("DEBUG DAG LOAD: PYTHONPATH env:", os.environ.get("PYTHONPATH"))
+print("DEBUG DAG LOAD: sys.path[:5]:", sys.path[:5])
 
 default_args = {
     "owner": "airflow",
@@ -16,97 +21,30 @@ default_args = {
     "catchup": False,
 }
 
-def generate_data(**context):
-    """Generate data and upload to MinIO"""
-    cmd = [
-        "python3", "-m", "src.generator.generate_data",
-        "--num", "1000", "--upload", "--quiet"
-    ]
-    env = os.environ.copy()
-    env.update({
-        "MINIO_ENDPOINT": "minio:9000",
-        "MINIO_ROOT_USER": os.getenv("MINIO_ROOT_USER", "minioadmin"),
-        "MINIO_ROOT_PASSWORD": os.getenv("MINIO_ROOT_PASSWORD", "minioadmin"),
-        "MINIO_BUCKET": "incoming",
-    })
-    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
-    if result.returncode != 0:
-        print(f"Generate failed: {result.stderr}")
-        raise Exception("Data generation failed")
-    print(f"Generated data: {result.stdout}")
-    return result.stdout
+def validate_data(**kwargs):
+    import sys, os
+    print("DEBUG validate_data sys.path[:5]:", sys.path[:5])
+    print("DEBUG validate_data PYTHONPATH:", os.environ.get("PYTHONPATH"))
 
-def validate_data(**context):
-    """Validate latest CSV file"""
-    incoming_dir = Path("/opt/airflow/data/incoming")
-    csv_files = list(incoming_dir.glob("*.csv"))
-    if not csv_files:
-        raise Exception("No CSV files found in incoming directory")
-    
-    latest_file = max(csv_files, key=os.path.getctime)
-    print(f"Validating: {latest_file}")
-    
     from src.processor.validate import validate_orders
-    is_valid, message = validate_orders(str(latest_file))
-    
-    if not is_valid:
-        raise Exception(f"Validation failed: {message}")
-    
-    print(f"Validation passed: {message}")
-    return str(latest_file)
 
-def transform_data(**context):
-    """Transform validated data"""
-    incoming_dir = Path("/opt/airflow/data/incoming")
-    csv_files = list(incoming_dir.glob("*.csv"))
-    latest_file = max(csv_files, key=os.path.getctime)
-    
-    output_path = Path("/opt/airflow/data/processed/orders_transformed.csv")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    from src.processor.transform import transform_orders
-    transform_orders(input_csv=str(latest_file), output_csv=str(output_path))
-    
-    print(f"Transformed data saved to: {output_path}")
-    return str(output_path)
-
-def upsert_data(**context):
-    """Upsert transformed data to Postgres"""
-    processed_file = Path("/opt/airflow/data/processed/orders_transformed.csv")
-    if not processed_file.exists():
-        raise Exception("Processed file not found")
-    
-    from src.db.upsert import upsert_orders
-    upsert_orders(str(processed_file))
-    
-    print("Upsert completed successfully")
+    incoming_dir = "/opt/airflow/data/incoming"
+    for file in os.listdir(incoming_dir):
+        if file.endswith(".csv"):
+            file_path = os.path.join(incoming_dir, file)
+            print(f"Validating: {file_path}")
+            validate_orders(file_path)
 
 with DAG(
     "data_pipeline",
     default_args=default_args,
-    schedule_interval="@daily",
-    max_active_runs=1,
+    description="Online Orders Data Pipeline",
+    schedule_interval=None,
     catchup=False,
 ) as dag:
-
-    generate_task = PythonOperator(
-        task_id="generate_data",
-        python_callable=generate_data,
-    )
 
     validate_task = PythonOperator(
         task_id="validate_data",
         python_callable=validate_data,
+        provide_context=True,
     )
-
-    transform_task = PythonOperator(
-        task_id="transform_data",
-        python_callable=transform_data,
-    )
-
-    upsert_task = PythonOperator(
-        task_id="upsert_data",
-        python_callable=upsert_data,
-    )
-
-    generate_task >> validate_task >> transform_task >> upsert_task
