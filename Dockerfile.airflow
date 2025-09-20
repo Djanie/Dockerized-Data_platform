@@ -1,22 +1,31 @@
+# Dockerfile.airflow
 FROM apache/airflow:2.8.1-python3.10
 
 USER root
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Switch back to airflow user
+# switch back to airflow user
 USER airflow
 
-# Create app folder and copy only what we need (dags, src, requirements)
+# copy dags, data, tests (helps image parity) and src
 COPY --chown=airflow:airflow dags/ /opt/airflow/dags/
 COPY --chown=airflow:airflow src/ /opt/airflow/src/
+# ensure setup.py from src is present (we expect src/setup.py already in repo)
+COPY --chown=airflow:airflow src/setup.py /opt/airflow/src/setup.py
+
+# copy requirements if you have one (optional)
 COPY --chown=airflow:airflow requirements.txt /opt/airflow/requirements.txt
 
-# Install python deps (including editable if you want)
-RUN pip install --no-cache-dir -r /opt/airflow/requirements.txt
+# install python deps (first any global reqs)
+RUN pip install --no-cache-dir -r /opt/airflow/requirements.txt || true
 
-# ensure python sees /opt/airflow/src
+# install your src package in editable mode so imports are stable
+RUN pip install --no-cache-dir -e /opt/airflow/src
+
+# also set PYTHONPATH to be safe
 ENV PYTHONPATH="/opt/airflow/src:${PYTHONPATH}"
 
-# default user (keeps airflow user)
+# keep airflow user
 USER airflow
