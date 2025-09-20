@@ -1,0 +1,7 @@
+setup.py
+./generator/__init__.py
+./generator/generate_data.py
+data_pipeline_src.egg-info/PKG-INFO
+data_pipeline_src.egg-info/SOURCES.txt
+data_pipeline_src.egg-info/dependency_links.txt
+data_pipeline_src.egg-info/top_level.txt
