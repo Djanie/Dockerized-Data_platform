@@ -250,6 +250,8 @@ The pipeline is orchestrated using **Apache Airflow**. It is designed as a modul
      * New rows → inserted.
      * Existing rows → updated.
 
+  ![Postgress_database](docs/postgres_database.png)
+
 6. **Archival**
 
    * All files (raw, processed, rejected) are archived in MinIO to maintain lineage and traceability.
@@ -259,6 +261,8 @@ The pipeline is orchestrated using **Apache Airflow**. It is designed as a modul
    * Postgres tables are connected to **Metabase**.
    * Dashboards provide KPIs: average delivery times, cuisine popularity, revenue trends, and rating distributions.
 
+![Metabase-dasboard](docs/dashboard.png)
+
 **Reliability Features:**
 
 * **Retries** on transient failures.
@@ -266,7 +270,7 @@ The pipeline is orchestrated using **Apache Airflow**. It is designed as a modul
 * **Clear branching** for success/failure paths.
 * **Observability** through Airflow’s web UI.
 
-*(Screenshot: Airflow DAG — `airflow-dag.png`)*
+
 
 ---
 
