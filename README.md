@@ -6,6 +6,14 @@
 
 1. [Overview](#overview)
 2. [Problem statement & Objectives](#problem-statement--objectives)
+3. [Dataset](#3-dataset)  
+4. [Architecture](#4-architecture)  
+5. [Pipeline Workflow](#5-pipeline-workflow)  
+6. [Airflow DAG Explanation](#6-airflow-dag-explanation)  
+7. [How to Reproduce](#7-how-to-reproduce)  
+8. [Challenges](#8-challenges)  
+9. [Future Enhancements](#9-future-enhancements)  
+10. [Screenshots](#10-screenshots) 
 
 ---
 
