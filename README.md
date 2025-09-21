@@ -23,6 +23,8 @@
 
 This project is a dockerized, event-aware data pipeline that simulates and ingests online food-delivery orders, validates and transforms them, stores them in a Postgres analytics database, and surfaces KPIs in Metabase. It was built with following production-grade patterns: event-driven ingestion, strict schema validation, idempotent upserts, file-level audit trails, and clear observability.
 
+![Architecture image ](docs/architecture.png)
+
 ### 1.2 High-level components
 
 * **Data generator** — produces synthetic CSV files that represent incoming orders (used for testing & demo).
@@ -126,6 +128,83 @@ Below are the objectives I aimed to fulfil in this project, framed with measurab
 * **Validation coverage**: 100% of files processed must go through Pandera validation prior to upsert.
 * **Idempotency**: 0 duplicates per run (validated by `count(distinct order_id)`).
 * **Observability**: 100% of failed files must have an entry in `file_registry` with errors captured.
+
+---
+
+
+## 3. Dataset <a name="Dataset"></a>
+
+The pipeline uses a synthetic dataset that simulates real-world online food delivery transactions. Data is generated with the Faker library and written into CSV files, which are later ingested from MinIO.
+
+Schema Description:
+
+order_id (string) — unique identifier per order (with intentional duplicates across files to test deduplication).
+
+restaurant_id (int) — unique restaurant identifier.
+
+customer_id (int) — unique customer identifier.
+
+cuisine (string) — type of cuisine (e.g., Chinese, Indian, Italian).
+
+order_time (datetime) — time when the order was placed.
+
+delivery_time (datetime) — time when the delivery was completed.
+
+distance_km (float: 1–20) — delivery distance in kilometers.
+
+rating (int: 1–5, with ~2–5% nulls) — customer’s delivery rating.
+
+amount (float: 5–50) — order transaction amount.
+
+
+
+
+---
+
+## 4. Architecture
+
+The pipeline follows a **modern lakehouse-style architecture**, built fully with Dockerized services. It is structured around **zones, orchestration, validation, storage, and analytics**.
+
+**Key Components:**
+
+* **MinIO (S3-compatible storage)**
+
+  * Acts as the data lake.
+  * Organizes files into **raw**, **processed**, and **rejected** zones.
+  * Ensures data lineage by archiving all files.
+
+* **Apache Airflow**
+
+  * Orchestrates the pipeline through DAGs.
+  * Uses a **Sensor** to detect new file arrivals in the MinIO raw zone.
+  * Executes tasks for validation, transformation, and loading.
+  * Provides retry, logging, and monitoring for reliability.
+
+* **Pandera (Schema Validation)**
+
+  * Enforces strict data quality checks.
+  * Categorizes issues into **warnings** (pipeline continues) and **critical errors** (pipeline halts).
+  * Metadata is logged into Postgres for transparency.
+
+* **Postgres (Data Warehouse)**
+
+  * Stores structured data in fact and dimension tables.
+  * Ingestion is **idempotent**, ensuring no duplicate records.
+  * Acts as the single source of truth for downstream analytics.
+
+* **Metabase (Analytics Dashboard)**
+
+  * Connects directly to Postgres.
+  * Provides dashboards and queries for stakeholders to visualize KPIs (e.g., revenue, ratings, delivery performance).
+
+**Data Flow:**
+
+1. CSV files generated → land in **MinIO raw zone**.
+2. Airflow sensor detects file arrival → triggers DAG.
+3. Files validated with Pandera → clean ones move to **processed**, bad ones to **rejected**.
+4. Validated data → transformed and **upserted into Postgres**.
+5. Metabase queries Postgres → dashboards created for insights.
+
 
 ---
 
