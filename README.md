@@ -208,4 +208,66 @@ The pipeline follows a **modern lakehouse-style architecture**, built fully with
 
 ---
 
+Great 🙌 — here’s the **Pipeline Workflow** section written in a detailed, professional style:
+
+---
+
+## 5. Pipeline Workflow
+
+The pipeline is orchestrated using **Apache Airflow**. It is designed as a modular DAG where each stage is clearly defined, fault-tolerant, and idempotent.  
+
+ ![Airflow dag](docs/airflow-dag.png)
+**Workflow Steps:**
+
+1. **File Sensor (MinIO Raw Zone)**
+
+   * A dedicated **sensor** continuously watches the MinIO `raw/` bucket for new data files.
+   * Once a new file arrives, the DAG is triggered.
+
+2. **Data Validation (Pandera)**
+
+   * The file is validated against a **strict Pandera schema**.
+   * Checks include data types, nullability, ranges (e.g., distance 1–20 km, amount 5–50), and uniqueness of `order_id`.
+   * Results are logged into the Postgres `file_registry` table for auditing.
+
+3. **Branching Logic**
+
+   * **Valid files** → moved into **processed zone**.
+   * **Invalid files** → pushed into **rejected zone** with logs for debugging.
+   * The DAG uses **branching operators** to handle these paths gracefully.
+
+4. **Transformations**
+
+   * Data cleaning: handling null ratings, normalizing column types.
+   * Deduplication: removing duplicate `order_id`s.
+   * Preparing final structured format for warehouse loading.
+
+5. **Database Load (Postgres)**
+
+   * Processed data is upserted into **fact tables** in Postgres.
+   * Ingestion is idempotent:
+
+     * New rows → inserted.
+     * Existing rows → updated.
+
+6. **Archival**
+
+   * All files (raw, processed, rejected) are archived in MinIO to maintain lineage and traceability.
+
+7. **Analytics (Metabase)**
+
+   * Postgres tables are connected to **Metabase**.
+   * Dashboards provide KPIs: average delivery times, cuisine popularity, revenue trends, and rating distributions.
+
+**Reliability Features:**
+
+* **Retries** on transient failures.
+* **Task-level logging** for debugging.
+* **Clear branching** for success/failure paths.
+* **Observability** through Airflow’s web UI.
+
+*(Screenshot: Airflow DAG — `airflow-dag.png`)*
+
+---
+
 
