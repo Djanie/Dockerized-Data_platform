@@ -224,6 +224,8 @@ The pipeline is orchestrated using **Apache Airflow**. It is designed as a modul
    * A dedicated **sensor** continuously watches the MinIO `raw/` bucket for new data files.
    * Once a new file arrives, the DAG is triggered.
 
+![Minio](docs/minio.png)
+
 2. **Data Validation (Pandera)**
 
    * The file is validated against a **strict Pandera schema**.
@@ -271,7 +273,152 @@ The pipeline is orchestrated using **Apache Airflow**. It is designed as a modul
 * **Observability** through Airflow’s web UI.
 
 
+---
+
 
 ---
+
+## 7. How to Reproduce
+
+Follow these steps to set up and run the pipeline locally:
+
+1. **Clone Repository**
+
+   ```bash
+   git clone <your-repo-url>
+   cd <your-project-folder>
+   ```
+
+2. **Start Docker Environment**
+   Make sure Docker & Docker Compose are installed, then run:
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+   This starts:
+
+   * **Airflow** (webserver, scheduler, metadata DB)
+   * **Postgres** (data warehouse)
+   * **MinIO** (S3-compatible storage)
+   * **Metabase** (analytics dashboard)
+
+3. **Access Services**
+
+   * Airflow UI → `http://localhost:8080`
+   * MinIO Console → `http://localhost:9001`
+   * PgAdmin → `http://localhost:5050`
+   * Metabase → `http://localhost:3000`
+
+4. **Run the Pipeline**
+
+   * Log into **Airflow** (`airflow` / `airflow` default creds).
+   * Enable the DAG `data_pipeline`.
+   * Trigger a manual run or drop a new file into the MinIO raw bucket.
+
+5. **Validate Execution**
+
+   * Check Airflow DAG run history for task status.
+   * Confirm file movement between raw, processed, and rejected zones in MinIO.
+   * Verify upserts in Postgres using PgAdmin.
+
+6. **View Analytics**
+
+   * Connect Metabase to Postgres (if not pre-configured).
+   * Explore the pre-built dashboard or create new queries (e.g., top cuisines, average delivery distance, revenue by restaurant).
+
+
+---
+
+## 8. Challenges
+
+Building this pipeline was not just about connecting tools together; it involved solving **practical engineering problems** that mirror what happens in production systems:
+
+1. **Schema Drift & Data Quality**
+
+   * Challenge: Input data sometimes contained missing ratings, out-of-range values (e.g., distance > 20 km), or duplicate `order_id`s.
+   * Solution: Implemented **Pandera validation** with strict rules and branching logic. Invalid files are safely rejected without breaking the DAG.
+
+2. **Idempotency in Loading**
+
+   * Challenge: Running the DAG multiple times risked duplicate inserts.
+   * Solution: Designed **idempotent upserts** in Postgres (insert new, update existing). This ensures consistent warehouse state even under retries.
+
+3. **Orchestration & Dependencies**
+
+   * Challenge: Ensuring downstream tasks only run when upstream steps succeed, while avoiding pipeline failures due to bad files.
+   * Solution: Used **Airflow branching** and **dummy tasks** to model “wait → validate → transform → load → archive” while gracefully skipping invalid branches.
+
+4. **Observability & Debugging**
+
+   * Challenge: Debugging failed DAG runs without visibility into data lineage.
+   * Solution: Logged validation results to Postgres (`file_registry`) and relied on Airflow’s retry mechanism + task-level logs.
+
+5. **Environment & Tooling**
+
+   * Challenge: Running multiple services (Airflow, Postgres, MinIO, Metabase) locally was resource-intensive.
+   * Solution: Standardized everything in **Docker Compose**, ensuring reproducibility across machines with minimal manual setup.
+
+6. **Archival & Lineage**
+
+   * Challenge: In many pipelines, once data is processed, the raw files are lost — making audits impossible.
+   * Solution: Implemented **file archival** in MinIO, preserving raw, processed, and rejected files for future traceability.
+
+These challenges were crucial to solve because they mirror **real-world production constraints** in data engineering: reliability, repeatability, and trust in the data.
+
+---
+
+
+---
+
+## 9. Future Enhancements
+
+While the pipeline is fully functional, several improvements can make it **closer to a production-grade system**:
+
+1. **Real-Time Processing**
+
+   * Integrate **Kafka or AWS Kinesis** to capture streaming events instead of relying on batch file drops.
+   * Use Airflow or Kafka Streams for near real-time ingestion and transformation.
+
+2. **CI/CD & Testing**
+
+   * Add automated tests for schema validation, transformations, and database upserts.
+   * Implement GitHub Actions for CI/CD to build, test, and deploy changes seamlessly.
+
+3. **Data Quality Monitoring**
+
+   * Extend validation with **Great Expectations** or **Soda Core** for richer rules.
+   * Add anomaly detection (e.g., sudden drop in orders or spike in delivery times).
+
+4. **Observability & Alerting**
+
+   * Push pipeline logs and metrics into **Prometheus + Grafana** for better observability.
+   * Add **Slack/Email alerts** for failed DAG runs or schema mismatches.
+
+5. **Scaling & Fault Tolerance**
+
+   * Deploy on **Kubernetes** with Helm charts for scalability.
+   * Add **Dead Letter Queues (DLQ)** to capture unprocessed data events safely.
+
+6. **Data Modeling**
+
+   * Evolve Postgres into a **star-schema warehouse** (fact + dimension tables).
+   * Build **incremental KPIs** (e.g., revenue by week, repeat customers).
+
+7. **Security & Governance**
+
+   * Integrate authentication/authorization for MinIO and Metabase.
+   * Add data encryption at rest and in transit.
+   * Implement **role-based access control** for dashboards.
+
+8. **Cloud Migration**
+
+   * Move storage from MinIO to **AWS S3**, Postgres to **AWS RDS**, and orchestration to **MWAA (Managed Airflow)**.
+   * This ensures higher availability, reliability, and scalability in production.
+
+By addressing these enhancements, the project can evolve from a local prototype into a **robust enterprise data platform** capable of supporting real-world food delivery analytics.
+
+---
+
 
 
