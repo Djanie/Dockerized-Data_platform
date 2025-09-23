@@ -34,7 +34,7 @@ with DAG(
 ) as dag:
 
     # Task to represent waiting for data in MinIO
-    wait_for_minio = DummyOperator(task_id="wait_for_minio")
+    wait_for_minio = sensorOperator(task_id="wait_for_minio")
 
     # Task to generate data
     def run_generator(**kwargs):
